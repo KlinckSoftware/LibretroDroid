@@ -590,7 +590,7 @@ void LibretroDroid::resetCheat() {
 void LibretroDroid::setCheat(unsigned index, bool enabled, const std::string& code) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    core->retro_cheat_set(index, enabled, Utils::cloneToCString(code));
+    core->retro_cheat_set(index, enabled, code.c_str());
 }
 
 bool LibretroDroid::requiresVideoRefresh() const {

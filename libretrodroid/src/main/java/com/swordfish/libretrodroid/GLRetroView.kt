@@ -168,9 +168,17 @@ class GLRetroView(
         }
     }
 
+    /** Enables or disables the cheat at [index] with the given libretro [code]; cheats are cleared on core reload. */
     fun setCheat(index: Int, enable: Boolean, code: String, useEmulationThread: Boolean = true) {
         runOnEmulationThread(useEmulationThread) {
             LibretroDroid.setCheat(index, enable, code)
+        }
+    }
+
+    /** Clears every cheat previously set via [setCheat]; cheats are cleared automatically on core reload. */
+    fun resetCheats(useEmulationThread: Boolean = true) {
+        runOnEmulationThread(useEmulationThread) {
+            LibretroDroid.resetCheat()
         }
     }
 
