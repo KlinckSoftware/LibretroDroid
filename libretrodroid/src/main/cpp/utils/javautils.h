@@ -22,6 +22,7 @@
 #include "string"
 
 #include <jni.h>
+#include <functional>
 #include "../environment.h"
 #include "../shadermanager.h"
 
