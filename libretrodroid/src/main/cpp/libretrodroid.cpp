@@ -96,6 +96,7 @@ void LibretroDroid::resetGlobalVariables() {
     fpsSync = nullptr;
     input = nullptr;
     rumble = nullptr;
+    rewindManager = nullptr;
 }
 
 int LibretroDroid::availableDisks() {
@@ -147,7 +148,15 @@ void LibretroDroid::setControllerType(unsigned int port, unsigned int type) {
 bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    return core->retro_unserialize(data, size);
+    bool result = core->retro_unserialize(data, size);
+
+    // A user-triggered save state load must not let rewind replay states
+    // that predate it.
+    if (result && rewindManager) {
+        rewindManager->reset();
+    }
+
+    return result;
 }
 
 JNIEXPORT jboolean JNICALL LibretroDroid::unserializeSRAM(int8_t* data, size_t size) {
@@ -263,7 +272,10 @@ void LibretroDroid::create(
     bool enableMicrophone,
     bool duplicateFrames,
     std::optional<ImmersiveMode::Config> immersiveModeConfig,
-    const std::string& language
+    const std::string& language,
+    bool rewindEnabled,
+    unsigned int rewindMemoryLimitBytes,
+    unsigned int rewindCaptureIntervalFrames
 ) {
     LOGD("Performing libretrodroid create");
 
@@ -307,6 +319,13 @@ void LibretroDroid::create(
     fragmentShaderConfig = shaderConfig;
 
     rumble = std::make_unique<Rumble>();
+
+    this->rewindEnabled = rewindEnabled;
+    rewindActive.store(false, std::memory_order_relaxed);
+    rewindStepParity = false;
+    rewindManager = rewindEnabled
+        ? std::make_unique<RewindManager>(rewindMemoryLimitBytes, rewindCaptureIntervalFrames)
+        : nullptr;
 }
 
 void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
@@ -419,6 +438,7 @@ void LibretroDroid::destroy() {
     video = nullptr;
     core = nullptr;
     rumble = nullptr;
+    rewindManager = nullptr;
     fpsSync = nullptr;
     audio = nullptr;
 
@@ -456,8 +476,24 @@ void LibretroDroid::step() {
         frames = std::min(requestedFrames, 2u);
     }
 
-    for (size_t i = 0; i < frames * frameSpeed; i++)
-        core->retro_run();
+    if (rewindManager && rewindActive.load(std::memory_order_relaxed)) {
+        // Rewind plays at half speed (every other frame) for controllability.
+        // retro_unserialize alone does not trigger a video refresh on most
+        // cores, so after each rewound state we run exactly one core frame to
+        // redraw it (the RetroArch approach). handleAudioCallback drops the
+        // audio those runs produce, so playback stays silent while rewinding.
+        rewindStepParity = !rewindStepParity;
+        if (rewindStepParity && rewindManager->rewindStep(core.get())) {
+            core->retro_run();
+        }
+    } else {
+        for (size_t i = 0; i < frames * frameSpeed; i++) {
+            core->retro_run();
+            if (rewindManager) {
+                rewindManager->onFrame(core.get());
+            }
+        }
+    }
 
     if (video && !video->rendersInVideoCallback()) {
         video->renderFrame();
@@ -539,7 +575,10 @@ void LibretroDroid::handleVideoRefresh(
 }
 
 size_t LibretroDroid::handleAudioCallback(const int16_t *data, size_t frames) {
-    if (audio && audioEnabled) {
+    // Rewind runs retro_run() once per rewound state purely to redraw the frame;
+    // the forward audio those runs produce would sound garbled, so gate it out.
+    bool rewinding = rewindActive.load(std::memory_order_relaxed);
+    if (audio && audioEnabled && !rewinding) {
         audio->write(data, frames);
     }
     return frames;
@@ -568,6 +607,10 @@ void LibretroDroid::reset() {
     std::lock_guard<std::mutex> lock(coreLock);
 
     core->retro_reset();
+
+    if (rewindManager) {
+        rewindManager->reset();
+    }
 }
 
 std::pair<int8_t*, size_t> LibretroDroid::serializeState() {
@@ -618,6 +661,13 @@ void LibretroDroid::afterGameLoad() {
     updateAudioSampleRateMultiplier();
 
     defaultAspectRatio = findDefaultAspectRatio(system_av_info);
+
+    // A fresh/reloaded game invalidates any previously buffered rewind
+    // history and may also report a different serialize size, so the ring
+    // buffer is (re)initialized here, once retro_serialize_size() is known.
+    if (rewindManager) {
+        rewindManager->init(core->retro_serialize_size());
+    }
 }
 
 float LibretroDroid::findDefaultAspectRatio(const retro_system_av_info& system_av_info) {
@@ -633,6 +683,19 @@ void LibretroDroid::handleRumbleUpdates(const std::function<void(int, float, flo
     if (rumble && rumbleEnabled) {
         rumble->handleRumbleUpdates(handler);
     }
+}
+
+void LibretroDroid::startRewind() {
+    rewindActive.store(true, std::memory_order_relaxed);
+}
+
+void LibretroDroid::stopRewind() {
+    rewindActive.store(false, std::memory_order_relaxed);
+    rewindStepParity = false;
+}
+
+bool LibretroDroid::isRewindSupported() const {
+    return rewindManager != nullptr && rewindManager->isEnabled();
 }
 
 void LibretroDroid::setViewport(Rect viewportRect) {

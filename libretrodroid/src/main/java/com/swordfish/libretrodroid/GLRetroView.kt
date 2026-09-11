@@ -108,7 +108,10 @@ class GLRetroView(
             data.enableMicrophone,
             data.skipDuplicateFrames,
             data.immersiveMode,
-            getDeviceLanguage()
+            getDeviceLanguage(),
+            data.rewindEnabled,
+            data.rewindMemoryLimitBytes,
+            data.rewindCaptureIntervalFrames
         )
         LibretroDroid.setRumbleEnabled(data.rumbleEventsEnabled)
         LibretroDroid.setViewportAlignment(data.viewportAlignment.value)
@@ -202,6 +205,26 @@ class GLRetroView(
 
     fun reset(useEmulationThread: Boolean = true) = runOnEmulationThread(useEmulationThread) {
         LibretroDroid.reset()
+    }
+
+    /**
+     * Starts hold-to-rewind playback. Rewind runs at half of the normal frame rate and mutes
+     * audio for its duration. Call is fire-and-forget (no emulation-thread marshalling) so
+     * press-and-hold input stays low latency; the underlying flag is read atomically from the
+     * emulation thread on every step.
+     */
+    fun startRewind() {
+        LibretroDroid.startRewind()
+    }
+
+    /** Stops hold-to-rewind playback and resumes normal emulation on the next step. */
+    fun stopRewind() {
+        LibretroDroid.stopRewind()
+    }
+
+    /** Returns whether the currently loaded core/state supports rewind (i.e. the ring buffer was successfully allocated). */
+    fun isRewindSupported(useEmulationThread: Boolean = true): Boolean {
+        return runOnEmulationThread(useEmulationThread) { LibretroDroid.isRewindSupported() }
     }
 
     fun getGLRetroEvents(): Flow<GLRetroEvents> {
