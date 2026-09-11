@@ -478,11 +478,13 @@ void LibretroDroid::step() {
 
     if (rewindManager && rewindActive.load(std::memory_order_relaxed)) {
         // Rewind plays at half speed (every other frame) for controllability.
-        // We never call retro_run() while rewinding, so no new audio samples
-        // are produced and playback stays silent for the duration.
+        // retro_unserialize alone does not trigger a video refresh on most
+        // cores, so after each rewound state we run exactly one core frame to
+        // redraw it (the RetroArch approach). handleAudioCallback drops the
+        // audio those runs produce, so playback stays silent while rewinding.
         rewindStepParity = !rewindStepParity;
-        if (rewindStepParity) {
-            rewindManager->rewindStep(core.get());
+        if (rewindStepParity && rewindManager->rewindStep(core.get())) {
+            core->retro_run();
         }
     } else {
         for (size_t i = 0; i < frames * frameSpeed; i++) {
@@ -573,7 +575,10 @@ void LibretroDroid::handleVideoRefresh(
 }
 
 size_t LibretroDroid::handleAudioCallback(const int16_t *data, size_t frames) {
-    if (audio && audioEnabled) {
+    // Rewind runs retro_run() once per rewound state purely to redraw the frame;
+    // the forward audio those runs produce would sound garbled, so gate it out.
+    bool rewinding = rewindActive.load(std::memory_order_relaxed);
+    if (audio && audioEnabled && !rewinding) {
         audio->write(data, frames);
     }
     return frames;
