@@ -73,20 +73,34 @@ const std::string ShaderManager::crtShaderFragment =
     "varying HIGHP vec2 screenCoords;\n"
     "varying mediump float screenMaskStrength;\n"
     "\n"
-    "#define INTENSITY 0.30\n"
-    "#define BRIGHTBOOST 0.30\n"
-    "\n"
     "void main() {\n"
-    "  lowp vec3 texel = texture2D(texture, coords).rgb;\n"
+    "  HIGHP vec2 curvedCoords = coords;\n"
+    "  lowp float insideBounds = 1.0;\n"
+    "\n"
+    "  if (CURVATURE != 0.0) {\n"
+    "    HIGHP vec2 curvatureOffset = curvedCoords * 2.0 - vec2(1.0);\n"
+    "    curvedCoords += curvatureOffset * dot(curvatureOffset, curvatureOffset) * CURVATURE;\n"
+    "    insideBounds = step(0.0, curvedCoords.x) * step(curvedCoords.x, 1.0) * step(0.0, curvedCoords.y) * step(curvedCoords.y, 1.0);\n"
+    "  }\n"
+    "\n"
+    "  lowp vec3 texel = texture2D(texture, curvedCoords).rgb;\n"
     "  lowp vec3 pixelHigh = ((1.0 + BRIGHTBOOST) - (0.2 * texel)) * texel;\n"
     "  lowp vec3 pixelLow  = ((1.0 - INTENSITY) + (0.1 * texel)) * texel;\n"
     "\n"
-    "  HIGHP vec2 coords = fract(screenCoords) * 2.0 - vec2(1.0);\n"
+    "  HIGHP vec2 maskCoords = fract(curvedCoords * textureSize) * 2.0 - vec2(1.0);\n"
     "\n"
-    "  lowp float mask = 1.0 - abs(coords.y);\n"
+    "  lowp float mask = 1.0 - abs(maskCoords.y);\n"
     "\n"
-    "  gl_FragColor = vec4(mix(texel, mix(pixelLow, pixelHigh, mask), screenMaskStrength), 1.0);\n"
+    "  lowp vec3 result = mix(texel, mix(pixelLow, pixelHigh, mask), screenMaskStrength);\n"
+    "\n"
+    "  gl_FragColor = vec4(result * insideBounds, 1.0);\n"
     "}\n";
+
+const std::unordered_map<std::string, std::string> ShaderManager::crtParams = {
+    { "INTENSITY", "0.30" },
+    { "BRIGHTBOOST", "0.30" },
+    { "CURVATURE", "0.0" },
+};
 
 const std::string ShaderManager::lcdShaderFragment =
     "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
@@ -147,6 +161,32 @@ const std::string ShaderManager::defaultSharpFragment =
     "  mediump vec2 sharpCoords = (floor(screenCoords) + x) / textureSize;\n"
     "\n"
     "  vec4 tex = texture2D(texture, sharpCoords);\n"
+    "  gl_FragColor = vec4(tex.rgb, 1.0);\n"
+    "}\n";
+
+const std::string ShaderManager::sharpBilinearFragment =
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+    "#define HIGHP highp\n"
+    "#else\n"
+    "#define HIGHP mediump\n"
+    "#endif\n"
+    "\n"
+    "precision mediump float;\n"
+    "uniform lowp sampler2D texture;\n"
+    "uniform HIGHP vec2 textureSize;\n"
+    "uniform mediump float screenDensity;\n"
+    "\n"
+    "varying HIGHP vec2 coords;\n"
+    "\n"
+    "void main() {\n"
+    "  mediump float sharpness = max(screenDensity, 1.0);\n"
+    "  HIGHP vec2 texCoords = coords * textureSize;\n"
+    "  HIGHP vec2 texelFloor = floor(texCoords);\n"
+    "  mediump vec2 fractional = texCoords - texelFloor;\n"
+    "  mediump vec2 offset = clamp((fractional - 0.5) * sharpness, -0.5, 0.5);\n"
+    "  HIGHP vec2 sharpCoords = (texelFloor + 0.5 + offset) / textureSize;\n"
+    "\n"
+    "  lowp vec4 tex = texture2D(texture, sharpCoords);\n"
     "  gl_FragColor = vec4(tex.rgb, 1.0);\n"
     "}\n";
 
@@ -1534,7 +1574,8 @@ ShaderManager::Chain ShaderManager::getShader(const ShaderManager::Config& confi
     }
 
     case Type::SHADER_CRT: {
-        return { { { defaultShaderVertex, crtShaderFragment, true, 1.0 } } , true };
+        std::string defines = buildDefines(crtParams, config.params);
+        return { { { defaultShaderVertex, defines + crtShaderFragment, true, 1.0 } } , true };
     }
 
     case Type::SHADER_LCD: {
@@ -1543,6 +1584,10 @@ ShaderManager::Chain ShaderManager::getShader(const ShaderManager::Config& confi
 
     case Type::SHADER_SHARP: {
         return { { { defaultShaderVertex, defaultSharpFragment, true, 1.0 } }, true };
+    }
+
+    case Type::SHADER_SHARP_BILINEAR: {
+        return { { { defaultShaderVertex, sharpBilinearFragment, true, 1.0 } }, true };
     }
 
     case Type::SHADER_UPSCALE_CUT: {

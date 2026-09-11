@@ -37,6 +37,11 @@ public class LibretroDroid {
     public static final int SHADER_UPSCALE_CUT = 4;
     public static final int SHADER_UPSCALE_CUT2 = 5;
     public static final int SHADER_UPSCALE_CUT3 = 6;
+    public static final int SHADER_SHARP_BILINEAR = 7;
+
+    public static final String SHADER_CRT_PARAM_CURVATURE = "CURVATURE";
+    public static final String SHADER_CRT_PARAM_INTENSITY = "INTENSITY";
+    public static final String SHADER_CRT_PARAM_BRIGHTBOOST = "BRIGHTBOOST";
 
     public static final String SHADER_UPSCALE_CUT_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
     public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";
