@@ -419,8 +419,17 @@ class GLRetroView(
         return when (config) {
             is ShaderConfig.Default -> GLRetroShader(LibretroDroid.SHADER_DEFAULT)
             is ShaderConfig.CRT -> GLRetroShader(LibretroDroid.SHADER_CRT)
+            is ShaderConfig.CRTCurved -> GLRetroShader(
+                LibretroDroid.SHADER_CRT,
+                buildParams(
+                    LibretroDroid.SHADER_CRT_PARAM_CURVATURE to toParamFormatted(config.curvature),
+                    LibretroDroid.SHADER_CRT_PARAM_INTENSITY to toParamFormatted(config.scanlineIntensity),
+                    LibretroDroid.SHADER_CRT_PARAM_BRIGHTBOOST to toParamFormatted(config.brightBoost),
+                )
+            )
             is ShaderConfig.LCD -> GLRetroShader(LibretroDroid.SHADER_LCD)
             is ShaderConfig.Sharp -> GLRetroShader(LibretroDroid.SHADER_SHARP)
+            is ShaderConfig.SharpBilinear -> GLRetroShader(LibretroDroid.SHADER_SHARP_BILINEAR)
             is ShaderConfig.CUT -> GLRetroShader(
                 LibretroDroid.SHADER_UPSCALE_CUT,
                 buildParams(
@@ -473,6 +482,10 @@ class GLRetroView(
 
     private fun toParam(param: Float): String {
         return param.toString()
+    }
+
+    private fun toParamFormatted(param: Float): String {
+        return String.format(Locale.US, "%.4f", param)
     }
 
     private fun toParam(param: Boolean): String {

@@ -23,6 +23,18 @@ sealed interface ShaderConfig {
     object CRT : ShaderConfig
     object LCD : ShaderConfig
     object Sharp : ShaderConfig
+    object SharpBilinear : ShaderConfig
+
+    /**
+     * CRT shader with tunable scanline intensity/brightness boost plus an optional barrel
+     * curvature effect. Kept as a separate type (rather than turning [CRT] into a data class)
+     * so that existing bare references to the [CRT] object remain source-compatible.
+     */
+    data class CRTCurved(
+        val curvature: Float = 0f,
+        val scanlineIntensity: Float = 0.30f,
+        val brightBoost: Float = 0.30f,
+    ) : ShaderConfig
 
     data class CUT(
         val useDynamicBlend: Boolean = true,
