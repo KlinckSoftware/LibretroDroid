@@ -355,7 +355,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_create(
     jboolean enableMicrophone,
     jboolean skipDuplicateFrames,
     jobject immersiveMode,
-    jstring language
+    jstring language,
+    jboolean rewindEnabled,
+    jint rewindMemoryLimitBytes,
+    jint rewindCaptureIntervalFrames
 ) {
     try {
         auto corePath = JniString(env, soFilePath);
@@ -404,7 +407,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_create(
             enableMicrophone,
             skipDuplicateFrames,
             parsedConfig,
-            deviceLanguage.stdString()
+            deviceLanguage.stdString(),
+            rewindEnabled,
+            rewindMemoryLimitBytes > 0 ? (unsigned int) rewindMemoryLimitBytes : 0,
+            rewindCaptureIntervalFrames > 0 ? (unsigned int) rewindCaptureIntervalFrames : 0
         );
 
     } catch (libretrodroid::LibretroDroidError& exception) {
@@ -570,6 +576,27 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAudioEn
     jboolean enabled
 ) {
     LibretroDroid::getInstance().setAudioEnabled(enabled);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_startRewind(
+    JNIEnv* env,
+    jclass obj
+) {
+    LibretroDroid::getInstance().startRewind();
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_stopRewind(
+    JNIEnv* env,
+    jclass obj
+) {
+    LibretroDroid::getInstance().stopRewind();
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_isRewindSupported(
+    JNIEnv* env,
+    jclass obj
+) {
+    return LibretroDroid::getInstance().isRewindSupported() ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderConfig(

@@ -35,6 +35,9 @@ class GLRetroViewData(context: Context) {
     var skipDuplicateFrames: Boolean = false
     var enableMicrophone: Boolean = false
     var immersiveMode: ImmersiveMode? = null
+    var rewindEnabled: Boolean = false
+    var rewindMemoryLimitBytes: Int = 128 * 1024 * 1024
+    var rewindCaptureIntervalFrames: Int = 10
 }
 
 enum class ViewportAlignment(val value: Int) {

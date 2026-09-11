@@ -29,6 +29,7 @@
 #include <memory>
 #include <optional>
 #include <functional>
+#include <atomic>
 
 #include "log.h"
 #include "core.h"
@@ -38,6 +39,7 @@
 #include "fpssync.h"
 #include "input.h"
 #include "rumble.h"
+#include "rewindmanager.h"
 #include "shadermanager.h"
 #include "utils/javautils.h"
 #include "environment.h"
@@ -90,7 +92,10 @@ public:
         bool enableMicrophone,
         bool duplicateFrames,
         std::optional<ImmersiveMode::Config> immersiveModeConfig,
-        const std::string& language
+        const std::string& language,
+        bool rewindEnabled,
+        unsigned int rewindMemoryLimitBytes,
+        unsigned int rewindCaptureIntervalFrames
     );
     void resume();
     void step();
@@ -127,6 +132,10 @@ public:
     bool isRumbleEnabled() const;
     void handleRumbleUpdates(const std::function<void(int, float, float)> &handler);
 
+    void startRewind();
+    void stopRewind();
+    bool isRewindSupported() const;
+
     void setFrameSpeed(unsigned int speed);
 
     void setAudioEnabled(bool enabled);
@@ -162,6 +171,10 @@ private:
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
 
+    bool rewindEnabled = false;
+    std::atomic<bool> rewindActive { false };
+    bool rewindStepParity = false;
+
     ShaderManager::Config fragmentShaderConfig = ShaderManager::Config {
         ShaderManager::Type::SHADER_DEFAULT, { }
     };
@@ -185,6 +198,7 @@ private:
     std::unique_ptr<FPSSync> fpsSync;
     std::unique_ptr<Input> input;
     std::unique_ptr<Rumble> rumble;
+    std::unique_ptr<RewindManager> rewindManager;
 };
 
 } //namespace libretrodroid
